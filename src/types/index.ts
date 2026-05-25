@@ -23,6 +23,7 @@ export interface FurnitureDefinition {
   weight: 'light' | 'medium' | 'heavy'
   anchorable: boolean
   emoji: string
+  boxH: number  // isometric box height in screen pixels
 }
 
 export interface PlacedFurniture {

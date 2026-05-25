@@ -2,12 +2,14 @@ import { useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { PlacedFurniture, FurnitureDefinition, GridRect } from '@/types'
 import { useFloorPlanStore } from '@/store/useFloorPlanStore'
+import { toIso, hexDarken, hexLighten } from '@/utils/isometric'
 
 interface FurnitureItemProps {
   pf: PlacedFurniture
   def: FurnitureDefinition
   box: GridRect
-  cellSize: number
+  originX: number
+  originY: number
   isAffected: boolean
   isDragging: boolean
   disableInteraction?: boolean
@@ -17,7 +19,7 @@ interface FurnitureItemProps {
 }
 
 export default function FurnitureItem({
-  pf, def, box, cellSize: C, isAffected, isDragging, disableInteraction,
+  pf, def, box, originX, originY, isAffected, isDragging, disableInteraction,
   onDragStart, onDragMove, onDragEnd,
 }: FurnitureItemProps) {
   const { t } = useTranslation()
@@ -31,10 +33,28 @@ export default function FurnitureItem({
   const dragRef = useRef(false)
   const startRef = useRef({ x: 0, y: 0 })
 
-  const x = box.x * C
-  const y = box.y * C
-  const w = box.w * C
-  const h = box.h * C
+  const { x: col, y: row, w, h } = box
+  const H = isDragging ? def.boxH * 0.5 : def.boxH
+
+  const [tx, ty] = toIso(col, row, originX, originY)
+  const [rx, ry] = toIso(col + w, row, originX, originY)
+  const [bx, by] = toIso(col + w, row + h, originX, originY)
+  const [lx, ly] = toIso(col, row + h, originX, originY)
+
+  const topColor   = hexLighten(def.color, 0.25)
+  const leftColor  = hexDarken(def.color, 0.75)
+  const rightColor = hexDarken(def.color, 0.58)
+
+  const strokeColor = isSelected ? '#6366f1' : isAffected ? '#ef4444' : 'rgba(0,0,0,0.25)'
+  const strokeW = isSelected || isAffected ? 2.5 : 1.5
+
+  const cx = (tx + rx + bx + lx) / 4
+  const cy = (ty + ry + by + ly) / 4 - H
+  const emojiSize = Math.min(w, h) * 14 + 6
+
+  function pts(...coords: [number, number][]) {
+    return coords.map(([x, y]) => `${x},${y}`).join(' ')
+  }
 
   function onPointerDown(e: React.PointerEvent<SVGGElement>) {
     if (disableInteraction) return
@@ -48,7 +68,7 @@ export default function FurnitureItem({
   function onPointerMove(e: React.PointerEvent<SVGGElement>) {
     const dx = Math.abs(e.clientX - startRef.current.x)
     const dy = Math.abs(e.clientY - startRef.current.y)
-    if (dx > 3 || dy > 3) {
+    if (dx > 4 || dy > 4) {
       dragRef.current = true
       onDragMove(e.clientX, e.clientY)
     }
@@ -69,53 +89,106 @@ export default function FurnitureItem({
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
-      onContextMenu={e => { e.preventDefault() }}
-      style={{ cursor: isDragging ? 'grabbing' : 'grab', userSelect: 'none' }}
+      onContextMenu={e => e.preventDefault()}
+      style={{ cursor: isDragging ? 'grabbing' : disableInteraction ? 'default' : 'grab', userSelect: 'none' }}
+      opacity={isDragging ? 0.6 : 1}
       aria-label={t(def.labelKey)}
       role="button"
     >
-      <rect
-        x={x} y={y} width={w} height={h}
-        rx={4}
-        fill={isDragging ? `${def.color}80` : def.color}
-        stroke={isSelected ? '#6366f1' : isAffected ? '#ef4444' : 'rgba(0,0,0,0.2)'}
-        strokeWidth={isSelected ? 3 : isAffected ? 2 : 1}
-        opacity={isDragging ? 0.5 : 1}
+      {/* Drop shadow */}
+      <polygon
+        points={pts([tx, ty + 3], [rx, ry + 3], [bx, by + 3], [lx, ly + 3])}
+        fill="rgba(0,0,0,0.18)"
+        transform="translate(3,4)"
+        pointerEvents="none"
       />
 
+      {/* Left face (SW, screen-left, darkest) */}
+      <polygon
+        points={pts([lx, ly - H], [bx, by - H], [bx, by], [lx, ly])}
+        fill={leftColor}
+        stroke={strokeColor}
+        strokeWidth={strokeW}
+        strokeLinejoin="round"
+      />
+
+      {/* Right face (SE, screen-right, medium) */}
+      <polygon
+        points={pts([bx, by - H], [rx, ry - H], [rx, ry], [bx, by])}
+        fill={rightColor}
+        stroke={strokeColor}
+        strokeWidth={strokeW}
+        strokeLinejoin="round"
+      />
+
+      {/* Top face (lightest) */}
+      <polygon
+        points={pts([tx, ty - H], [rx, ry - H], [bx, by - H], [lx, ly - H])}
+        fill={topColor}
+        stroke={strokeColor}
+        strokeWidth={strokeW}
+        strokeLinejoin="round"
+      />
+
+      {/* Anchor indicator */}
+      {pf.isAnchored && (
+        <text x={lx + 4} y={ly - H - 2} fontSize={10} fill="#2563eb" pointerEvents="none">⚓</text>
+      )}
+
+      {/* Risk warning badge */}
+      {isAffected && !isDragging && (
+        <g pointerEvents="none">
+          <circle cx={rx} cy={ry - H} r={8} fill="#ef4444" />
+          <text x={rx} y={ry - H + 1} textAnchor="middle" dominantBaseline="middle" fontSize={9} fill="white">!</text>
+        </g>
+      )}
+
+      {/* Emoji label on top face */}
       <text
-        x={x + w / 2} y={y + h / 2 + 1}
+        x={cx}
+        y={cy + 1}
         textAnchor="middle"
         dominantBaseline="middle"
-        fontSize={Math.min(w, h) * 0.45}
+        fontSize={emojiSize}
         pointerEvents="none"
+        style={{ filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.3))' }}
       >
         {def.emoji}
       </text>
 
-      {pf.isAnchored && (
-        <text x={x + 2} y={y + 10} fontSize={10} pointerEvents="none">⚓</text>
-      )}
-
-      {isAffected && !isDragging && (
-        <g>
-          <circle cx={x + w - 8} cy={y + 8} r={8} fill="#ef4444" />
-          <text x={x + w - 8} y={y + 8} textAnchor="middle" dominantBaseline="middle" fontSize={9} fill="white" pointerEvents="none">!</text>
-        </g>
-      )}
-
+      {/* Selection toolbar */}
       {isSelected && !isDragging && (
-        <foreignObject x={x} y={y + h + 2} width={Math.max(w, 120)} height={60} style={{ overflow: 'visible' }}>
-          <div
-            style={{ display: 'flex', gap: 4, background: 'white', borderRadius: 6, padding: 4, boxShadow: '0 2px 8px rgba(0,0,0,0.15)', fontSize: 11 }}
-          >
-            <button onClick={() => rotateFurniture(pf.instanceId)} title={t('btn.rotate')} style={{ padding: '2px 6px', borderRadius: 4, background: '#f3f4f6', border: '1px solid #d1d5db', cursor: 'pointer' }}>↻</button>
+        <foreignObject
+          x={cx - 60}
+          y={ty - H - 36}
+          width={120}
+          height={32}
+          style={{ overflow: 'visible' }}
+        >
+          <div style={{
+            display: 'flex', gap: 3, background: 'white', borderRadius: 8,
+            padding: '3px 5px', boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+            fontSize: 11, whiteSpace: 'nowrap',
+          }}>
+            <button
+              onClick={() => rotateFurniture(pf.instanceId)}
+              title={t('btn.rotate')}
+              style={{ padding: '2px 6px', borderRadius: 4, background: '#f3f4f6', border: '1px solid #d1d5db', cursor: 'pointer' }}
+            >↻</button>
             {def.anchorable && (
-              <button onClick={() => toggleAnchor(pf.instanceId)} title={pf.isAnchored ? t('btn.unanchor') : t('btn.anchor')} style={{ padding: '2px 6px', borderRadius: 4, background: pf.isAnchored ? '#dbeafe' : '#f3f4f6', border: '1px solid #d1d5db', cursor: 'pointer' }}>
+              <button
+                onClick={() => toggleAnchor(pf.instanceId)}
+                title={pf.isAnchored ? t('btn.unanchor') : t('btn.anchor')}
+                style={{ padding: '2px 6px', borderRadius: 4, background: pf.isAnchored ? '#dbeafe' : '#f3f4f6', border: '1px solid #d1d5db', cursor: 'pointer' }}
+              >
                 {pf.isAnchored ? '⚓' : '🔩'}
               </button>
             )}
-            <button onClick={() => removeFurniture(pf.instanceId)} title={t('btn.remove')} style={{ padding: '2px 6px', borderRadius: 4, background: '#fee2e2', border: '1px solid #fca5a5', cursor: 'pointer', color: '#dc2626' }}>✕</button>
+            <button
+              onClick={() => removeFurniture(pf.instanceId)}
+              title={t('btn.remove')}
+              style={{ padding: '2px 6px', borderRadius: 4, background: '#fee2e2', border: '1px solid #fca5a5', cursor: 'pointer', color: '#dc2626' }}
+            >✕</button>
           </div>
         </foreignObject>
       )}
