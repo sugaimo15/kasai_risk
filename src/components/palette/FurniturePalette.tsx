@@ -6,7 +6,12 @@ import FurnitureTile from './FurnitureTile'
 
 const categories: FurnitureCategory[] = ['kitchen', 'storage', 'seating', 'sleeping', 'appliance', 'other']
 
-export default function FurniturePalette() {
+interface FurniturePaletteProps {
+  onSelect?: (defId: string) => void
+  selectedDefId?: string | null
+}
+
+export default function FurniturePalette({ onSelect, selectedDefId }: FurniturePaletteProps) {
   const { t } = useTranslation()
   const [activeCategory, setActiveCategory] = useState<FurnitureCategory>('kitchen')
 
@@ -16,7 +21,8 @@ export default function FurniturePalette() {
     <div className="flex flex-col h-full">
       <div className="p-3 border-b">
         <h2 className="text-sm font-bold text-gray-700 mb-2">{t('simulator.palette_title')}</h2>
-        <p className="text-xs text-gray-400 mb-2">{t('simulator.palette_hint')}</p>
+        {!onSelect && <p className="text-xs text-gray-400 mb-2">{t('simulator.palette_hint')}</p>}
+        {onSelect && <p className="text-xs text-red-500 mb-2 font-medium">タップして家具を選んでください</p>}
         <div className="flex flex-wrap gap-1">
           {categories.map(cat => (
             <button
@@ -36,7 +42,12 @@ export default function FurniturePalette() {
 
       <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
         {filtered.map(def => (
-          <FurnitureTile key={def.id} def={def} />
+          <FurnitureTile
+            key={def.id}
+            def={def}
+            onSelect={onSelect}
+            isSelected={selectedDefId === def.id}
+          />
         ))}
       </div>
     </div>

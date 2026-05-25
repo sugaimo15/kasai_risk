@@ -3,17 +3,25 @@ import { useDroppable } from '@dnd-kit/core'
 import { useFloorPlanStore } from '@/store/useFloorPlanStore'
 import { getFurnitureById } from '@/data/furniture'
 import { getBoundingBox } from '@/utils/geometry'
+import { useIsMobile } from '@/hooks/useIsMobile'
 import RiskOverlay from './RiskOverlay'
 import FurnitureItem from './FurnitureItem'
 import Room from './Room'
 
 const CELL = 40
 
-export default function FloorPlanCanvas() {
+interface FloorPlanCanvasProps {
+  pendingDefId?: string | null
+  onPendingPlace?: () => void
+}
+
+export default function FloorPlanCanvas({ pendingDefId, onPendingPlace }: FloorPlanCanvasProps) {
   const room = useFloorPlanStore(s => s.room)
   const placedFurniture = useFloorPlanStore(s => s.placedFurniture)
   const findings = useFloorPlanStore(s => s.findings)
   const moveFurniture = useFloorPlanStore(s => s.moveFurniture)
+  const placeFurniture = useFloorPlanStore(s => s.placeFurniture)
+  const isMobile = useIsMobile()
 
   const svgRef = useRef<SVGSVGElement>(null)
   const [draggingId, setDraggingId] = useState<string | null>(null)
@@ -24,6 +32,8 @@ export default function FloorPlanCanvas() {
   const width = room.widthCells * CELL
   const height = room.heightCells * CELL
 
+  const pendingDef = pendingDefId ? getFurnitureById(pendingDefId) : null
+
   function getSVGCoords(clientX: number, clientY: number): { gridX: number; gridY: number } | null {
     if (!svgRef.current) return null
     const rect = svgRef.current.getBoundingClientRect()
@@ -32,24 +42,48 @@ export default function FloorPlanCanvas() {
     return { gridX: Math.max(0, Math.min(x, room.widthCells - 1)), gridY: Math.max(0, Math.min(y, room.heightCells - 1)) }
   }
 
+  function handleCanvasTap(e: React.PointerEvent<SVGRectElement>) {
+    if (!pendingDef) return
+    e.stopPropagation()
+    const pos = getSVGCoords(e.clientX, e.clientY)
+    if (pos) {
+      const maxX = room.widthCells - pendingDef.widthCells
+      const maxY = room.heightCells - pendingDef.heightCells
+      placeFurniture(
+        pendingDef,
+        Math.max(0, Math.min(pos.gridX, maxX)),
+        Math.max(0, Math.min(pos.gridY, maxY))
+      )
+      onPendingPlace?.()
+    }
+  }
+
   const affectedIds = new Set(findings.flatMap(f => f.affectedInstanceIds))
+
+  const perspectiveStyle = isMobile
+    ? {}
+    : { transform: 'rotateX(30deg) rotateZ(-5deg)', transformOrigin: 'center center', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }
 
   return (
     <div
       ref={setNodeRef}
-      className="flex-1 overflow-auto bg-gray-200 flex items-center justify-center p-6"
+      className="flex-1 overflow-auto bg-gray-200 flex items-start justify-center p-4"
       data-floor-plan-container
     >
-      <div
-        style={{ perspective: '800px', display: 'inline-block' }}
-      >
-        <div style={{ transform: 'rotateX(30deg) rotateZ(-5deg)', transformOrigin: 'center center', display: 'inline-block', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+      {pendingDef && (
+        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-10 bg-red-600 text-white text-xs font-bold px-4 py-2 rounded-full shadow-lg pointer-events-none">
+          {pendingDef.emoji} {pendingDef.id} — 配置したい場所をタップ
+        </div>
+      )}
+
+      <div style={{ perspective: isMobile ? undefined : '800px', display: 'inline-block' }}>
+        <div style={{ display: 'inline-block', ...perspectiveStyle }}>
           <svg
             ref={svgRef}
             width={width}
             height={height}
             viewBox={`0 0 ${width} ${height}`}
-            style={{ display: 'block', cursor: 'default' }}
+            style={{ display: 'block', cursor: pendingDef ? 'crosshair' : 'default', touchAction: 'none' }}
             aria-label="間取り図"
           >
             <Room room={room} cellSize={CELL} />
@@ -70,6 +104,7 @@ export default function FloorPlanCanvas() {
                   cellSize={CELL}
                   isAffected={isAffected}
                   isDragging={draggingId === pf.instanceId}
+                  disableInteraction={!!pendingDef}
                   onDragStart={() => setDraggingId(pf.instanceId)}
                   onDragMove={(clientX, clientY) => {
                     const pos = getSVGCoords(clientX, clientY)
@@ -92,6 +127,16 @@ export default function FloorPlanCanvas() {
                 />
               )
             })}
+
+            {pendingDef && (
+              <rect
+                x={0} y={0}
+                width={width} height={height}
+                fill="rgba(99,102,241,0.04)"
+                style={{ cursor: 'crosshair' }}
+                onPointerUp={handleCanvasTap}
+              />
+            )}
 
             {ghostPos && draggingId && (() => {
               const pf = placedFurniture.find(p => p.instanceId === draggingId)

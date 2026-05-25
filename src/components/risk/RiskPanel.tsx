@@ -8,7 +8,7 @@ export default function RiskPanel() {
   const findings = useFloorPlanStore(s => s.findings)
 
   return (
-    <aside className="flex flex-col h-full bg-gray-50 border-l">
+    <aside className="flex flex-col bg-gray-50">
       <div className="p-3 border-b bg-white">
         <h2 className="font-bold text-gray-800 text-sm">{t('simulator.risk_title')}</h2>
       </div>
@@ -17,7 +17,7 @@ export default function RiskPanel() {
         <RiskScoreGauge findings={findings} />
       </div>
 
-      <div className="flex-1 overflow-y-auto p-3 space-y-2">
+      <div className="p-3 space-y-2">
         {findings.length === 0 ? (
           <div className="text-center text-gray-400 text-sm mt-8">
             <div className="text-4xl mb-2">✅</div>

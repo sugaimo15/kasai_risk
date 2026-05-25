@@ -10,13 +10,14 @@ interface FurnitureItemProps {
   cellSize: number
   isAffected: boolean
   isDragging: boolean
+  disableInteraction?: boolean
   onDragStart: () => void
   onDragMove: (clientX: number, clientY: number) => void
   onDragEnd: (clientX: number, clientY: number) => void
 }
 
 export default function FurnitureItem({
-  pf, def, box, cellSize: C, isAffected, isDragging,
+  pf, def, box, cellSize: C, isAffected, isDragging, disableInteraction,
   onDragStart, onDragMove, onDragEnd,
 }: FurnitureItemProps) {
   const { t } = useTranslation()
@@ -36,6 +37,7 @@ export default function FurnitureItem({
   const h = box.h * C
 
   function onPointerDown(e: React.PointerEvent<SVGGElement>) {
+    if (disableInteraction) return
     e.stopPropagation()
     e.currentTarget.setPointerCapture(e.pointerId)
     dragRef.current = false
