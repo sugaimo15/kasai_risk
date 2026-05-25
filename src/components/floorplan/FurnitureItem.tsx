@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { PlacedFurniture, FurnitureDefinition, GridRect } from '@/types'
 import { useFloorPlanStore } from '@/store/useFloorPlanStore'
@@ -422,6 +422,7 @@ export default function FurnitureItem({
   const isSelected = selectedInstanceId === pf.instanceId
   const dragRef = useRef(false)
   const startRef = useRef({ x: 0, y: 0 })
+  const [imgFailed, setImgFailed] = useState(false)
 
   const { x: col, y: row, w, h } = box
   const H = isDragging ? def.boxH * 0.5 : def.boxH
@@ -486,24 +487,49 @@ export default function FurnitureItem({
         pointerEvents="none"
       />
 
-      {/* Left face (SW, darkest) */}
-      <polygon
-        points={`${lx},${ly-H} ${bx},${by-H} ${bx},${by} ${lx},${ly}`}
-        fill={leftColor} stroke={strokeColor} strokeWidth={strokeW} strokeLinejoin="round"
-      />
-      {/* Right face (SE, medium) */}
-      <polygon
-        points={`${bx},${by-H} ${rx},${ry-H} ${rx},${ry} ${bx},${by}`}
-        fill={rightColor} stroke={strokeColor} strokeWidth={strokeW} strokeLinejoin="round"
-      />
-      {/* Top face (lightest) */}
-      <polygon
-        points={`${tx},${ty-H} ${rx},${ry-H} ${bx},${by-H} ${lx},${ly-H}`}
-        fill={topColor} stroke={strokeColor} strokeWidth={strokeW} strokeLinejoin="round"
-      />
+      {/* Furniture body: image sprite if available, else code-drawn 3D box */}
+      {imgFailed ? (
+        <>
+          {/* Left face (SW, darkest) */}
+          <polygon
+            points={`${lx},${ly-H} ${bx},${by-H} ${bx},${by} ${lx},${ly}`}
+            fill={leftColor} stroke={strokeColor} strokeWidth={strokeW} strokeLinejoin="round"
+          />
+          {/* Right face (SE, medium) */}
+          <polygon
+            points={`${bx},${by-H} ${rx},${ry-H} ${rx},${ry} ${bx},${by}`}
+            fill={rightColor} stroke={strokeColor} strokeWidth={strokeW} strokeLinejoin="round"
+          />
+          {/* Top face (lightest) */}
+          <polygon
+            points={`${tx},${ty-H} ${rx},${ry-H} ${bx},${by-H} ${lx},${ly-H}`}
+            fill={topColor} stroke={strokeColor} strokeWidth={strokeW} strokeLinejoin="round"
+          />
+          {renderDecal(def, col, row, w, h, H, lx, ly, bx, by, rx, ry, originX, originY)}
+        </>
+      ) : (
+        <image
+          href={`${import.meta.env.BASE_URL}furniture/${def.id}.png`}
+          x={lx}
+          y={ty - H}
+          width={(w + h) * TW / 2}
+          height={(w + h) * TH / 2 + H}
+          preserveAspectRatio="none"
+          onError={() => setImgFailed(true)}
+        />
+      )}
 
-      {/* ─ Custom decorations ─ */}
-      {renderDecal(def, col, row, w, h, H, lx, ly, bx, by, rx, ry, originX, originY)}
+      {/* Stroke outline when selected or at risk (shown over image too) */}
+      {(isSelected || isAffected) && (
+        <polygon
+          points={`${tx},${ty-H} ${rx},${ry-H} ${bx},${by-H} ${lx},${ly-H}`}
+          fill="none"
+          stroke={strokeColor}
+          strokeWidth={strokeW}
+          strokeLinejoin="round"
+          pointerEvents="none"
+        />
+      )}
 
       {/* Anchor indicator */}
       {pf.isAnchored && (
