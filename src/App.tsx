@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { HashRouter as BrowserRouter, Routes, Route } from 'react-router-dom'
 import '@/i18n'
 import Header from '@/components/layout/Header'
 import Footer from '@/components/layout/Footer'
